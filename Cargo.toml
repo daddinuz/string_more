@@ -1,0 +1,10 @@
+[package]
+authors = ["Davide Di Carlo <daddinuz@gmail.com>"]
+description = "Extension traits for `String` and `&str` types."
+name = "string_more"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+keywords = ["String", "str", "ext", "extension", "StringExt", "StrExt", "in_place", "in place"]
+
+[dependencies]
