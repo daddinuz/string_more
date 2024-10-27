@@ -448,7 +448,7 @@ impl EncodeUtf8 for String {
 
 #[cfg(test)]
 mod tests {
-    use super::{StrExt, StringExt};
+    use super::{EncodeUtf8, StrExt, StringExt};
 
     #[test]
     fn fill_start() {
@@ -615,7 +615,7 @@ mod tests {
 
     #[test]
     fn expand_tabs() {
-        const SEED: [(&str, usize, &str); 15] = [
+        const SEED: [(&str, usize, &str); 21] = [
             ("", 0, ""),
             ("", 1, ""),
             ("", 2, ""),
@@ -631,6 +631,12 @@ mod tests {
             ("\tx\ty\tx\t", 0, "\tx\ty\tx\t"),
             ("\tx\ty\tx\t", 1, " x y x "),
             ("\tx\ty\tx\t", 2, "  x  y  x  "),
+            ("\t·\t", 3, "   ·   "),
+            ("\tx\t", 3, "   x   "),
+            ("\t·\t", 4, "    ·    "),
+            ("\tx\t", 4, "    x    "),
+            ("\t·\t", 8, "        ·        "),
+            ("\tx\t", 8, "        x        "),
         ];
 
         for (init, tabsize, expected) in SEED {
@@ -884,7 +890,7 @@ mod tests {
 
     #[test]
     fn expand_tabs_in_place() {
-        const SEED: [(&str, usize, &str); 26] = [
+        const SEED: [(&str, usize, &str); 32] = [
             ("", 0, ""),
             ("", 1, ""),
             ("", 2, ""),
@@ -911,6 +917,12 @@ mod tests {
             ("\tx\t·\tx\t", 2, "  x  ·  x  "),
             ("·\tx\t·\tx\t·", 2, "·  x  ·  x  ·"),
             ("\t·\tx\t·\tx\t·\t", 2, "  ·  x  ·  x  ·  "),
+            ("\t·\t", 3, "   ·   "),
+            ("\tx\t", 3, "   x   "),
+            ("\t·\t", 4, "    ·    "),
+            ("\tx\t", 4, "    x    "),
+            ("\t·\t", 8, "        ·        "),
+            ("\tx\t", 8, "        x        "),
         ];
 
         for (init, tabsize, expected) in SEED {
@@ -925,11 +937,13 @@ mod tests {
 
     #[test]
     fn shift_in_place() {
-        const SEED: [(&str, usize, usize, &str, &str); 7] = [
+        const SEED: [(&str, usize, usize, &str, &str); 9] = [
             ("", 0, 0, "·", ""),
             ("x", 0, 0, "·", "x"),
+            ("x", 0, 1, "", "x"),
             ("x", 0, 1, "·", "·x"),
             ("x", 1, 1, "·", "x·"),
+            ("x", 1, 1, "", "x"),
             ("xy", 0, 1, "·", "·xy"),
             ("xy", 1, 1, "·", "x·y"),
             ("xy", 2, 1, "·", "xy·"),
@@ -939,6 +953,16 @@ mod tests {
             let mut sut = init.to_string();
             sut.shift_in_place(index, count, fill);
             assert_eq!(sut, expected);
+        }
+    }
+
+    #[test]
+    fn string_encode_utf8() {
+        const SEED: [&str; 4] = ["", "·", "x", "Hello world!"];
+
+        for init in SEED {
+            let sut = init.to_string();
+            assert_eq!(EncodeUtf8::encode_utf8(&sut, &mut ()), init);
         }
     }
 }
