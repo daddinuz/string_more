@@ -82,6 +82,10 @@ pub trait StrExt: sailed::Sailed {
 
     /// Shifts the characters starting at the specified `index` in the original slice by `count` positions,
     /// filling the gap with the specified `fill` characters.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index do not lie on a char boundary, or if it is out of bounds.
     fn shift(&self, index: usize, count: usize, fill: impl EncodeUtf8) -> String;
 }
 
@@ -136,7 +140,14 @@ pub trait StringExt: StrExt {
 
     /// Shifts the characters starting at the specified `index` by `count` positions, filling the resulting gap with `fill`,
     /// modifying the existing instance.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index do not lie on a char boundary, or if it is out of bounds.
     fn shift_in_place(&mut self, index: usize, count: usize, fill: impl EncodeUtf8);
+
+    /// Replaces all occurrences of a specified substring with another substring in the `String`, modifying it in place.
+    fn replace_in_place(&mut self, from: impl EncodeUtf8, to: impl EncodeUtf8);
 }
 
 impl<T> StrExt for T
@@ -382,7 +393,7 @@ impl StringExt for String {
                 i += tabsize;
             } else {
                 i += 1;
-                while !self.is_char_boundary(i) {
+                while i < self.len() && !self.is_char_boundary(i) {
                     i += 1;
                 }
             }
@@ -418,6 +429,23 @@ impl StringExt for String {
             for i in (index..index + count * fill.len()).step_by(fill.len()) {
                 bytes[i..i + fill.len()].copy_from_slice(fill.as_bytes())
             }
+        }
+    }
+
+    fn replace_in_place(&mut self, from: impl EncodeUtf8, to: impl EncodeUtf8) {
+        let (mut from_buf, mut to_buf) = (Default::default(), Default::default());
+        let from = from.encode_utf8(&mut from_buf);
+        let to = to.encode_utf8(&mut to_buf);
+
+        if self.is_empty() || from.is_empty() {
+            return;
+        }
+
+        let mut offset = 0;
+        while let Some(i) = self[offset..].find(from) {
+            offset += i;
+            self.replace_range(offset..offset + from.len(), to);
+            offset += to.len();
         }
     }
 }
@@ -952,6 +980,33 @@ mod tests {
         for (init, index, count, fill, expected) in SEED {
             let mut sut = init.to_string();
             sut.shift_in_place(index, count, fill);
+            assert_eq!(sut, expected);
+        }
+    }
+
+    #[test]
+    fn replace_in_place() {
+        const SEED: [(&str, &str, &str, &str); 15] = [
+            ("", "", "", ""),
+            ("", "·", "", ""),
+            ("·", "", "", "·"),
+            ("x", "·", "", "x"),
+            ("·", "x", "", "·"),
+            ("x", "x", "", ""),
+            ("·", "·", "", ""),
+            ("x", "x", "·", "·"),
+            ("·", "·", "x", "x"),
+            ("Hello world!", "!", ".", "Hello world."),
+            ("Hello world!", "!", "·", "Hello world·"),
+            ("Hello·world!", "·", " ", "Hello world!"),
+            ("Hello world!", " world", "", "Hello!"),
+            ("Hello world!", "Hello ", "", "world!"),
+            ("abc", "abc", "abcabc", "abcabc"),
+        ];
+
+        for (init, from, to, expected) in SEED {
+            let mut sut = init.to_string();
+            sut.replace_in_place(from, to);
             assert_eq!(sut, expected);
         }
     }
