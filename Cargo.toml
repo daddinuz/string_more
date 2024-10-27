@@ -7,5 +7,6 @@ edition = "2021"
 license = "MIT"
 keywords = ["String", "str", "ext", "extension", "StringExt", "StrExt", "in_place", "in place"]
 rust-version = "1.80"
+repository = "https://github.com/daddinuz/string_more"
 
 [dependencies]
