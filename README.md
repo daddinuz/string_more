@@ -113,6 +113,14 @@ s.shift_in_place(4, 2, ' ');
 assert_eq!(s, "Hello  World!")
 ```
 
+- **`replace_in_place`**: Replaces a substring with another substring. 
+
+```rust
+let s = "HelloWorld!".to_string();
+s.replace_in_place("World", " world");
+assert_eq!(s, "Hello world!")
+```
+
 
 ### `StrExt` (Immutable operations for `&str`)
 
