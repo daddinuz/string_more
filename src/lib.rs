@@ -10,16 +10,33 @@
 //! - **Immutable Operations**: Use `StrExt` to perform operations on `&str` that allocate and return new strings.
 //! - **Flexible and Efficient**: Designed to extend the standard string functionality without sacrificing performance.
 
+use std::collections::{BTreeMap, HashMap};
 use std::ops::Deref;
 
 mod sailed {
     pub trait Sailed {}
+
+    pub trait HzMap: Default {
+        fn incr(&mut self, key: char);
+    }
 }
 
 impl sailed::Sailed for char {}
 impl sailed::Sailed for &str {}
 impl sailed::Sailed for &mut str {}
 impl sailed::Sailed for String {}
+
+impl sailed::HzMap for BTreeMap<char, usize> {
+    fn incr(&mut self, key: char) {
+        self.entry(key).and_modify(|n| *n += 1).or_insert(1);
+    }
+}
+
+impl sailed::HzMap for HashMap<char, usize> {
+    fn incr(&mut self, key: char) {
+        self.entry(key).and_modify(|n| *n += 1).or_insert(1);
+    }
+}
 
 /// The `EncodeUtf8` trait provides a consistent interface for encoding different text-like types, making
 /// them easily interchangeable as inputs for functions requiring UTF-8 encoded data.
@@ -87,6 +104,20 @@ pub trait StrExt: sailed::Sailed {
     ///
     /// Panics if the index do not lie on a char boundary, or if it is out of bounds.
     fn shift(&self, index: usize, count: usize, fill: impl EncodeUtf8) -> String;
+
+    /// Computes the Levenshtein distance between the strings.
+    /// The strings may have different lengths.
+    fn levenshtein_distance(&self, other: &str) -> usize;
+
+    /// Computes the Hamming distance between the strings.
+    /// The strings must have the same lengths, otherwise this
+    /// function returns `None`.
+    fn hamming_distance(&self, other: &str) -> Option<usize>;
+
+    /// Computes the frequency of chars in the string.
+    /// The user can specify the output map in which the
+    /// frequencies will be stored.
+    fn char_frequencies<M: sailed::HzMap>(&self) -> M;
 }
 
 /// The `StringExt` trait extends `String` with advanced in-place manipulation methods,
@@ -258,6 +289,111 @@ where
 
         s.push_str(&self[index..]);
         s
+    }
+
+    // Adapted and slightly modified from the code found on
+    // rosettacode: https://rosettacode.org/wiki/Levenshtein_distance#C++
+    // by Martin Ettl; I don't know who you are but thank you! <3
+    fn levenshtein_distance(&self, other: &str) -> usize {
+        // --- [this is not part of the adapted code from C++] ---
+        let (source, target) = (self, other);
+
+        // optimize cases where source and target are the same instance.
+        if source.as_ptr() == target.as_ptr() && source.len() == target.len() {
+            return 0;
+        }
+
+        // optimize memory allocations by stripping common
+        // suffix and prefix between source and target.
+
+        let mut end = source
+            .bytes()
+            .rev()
+            .zip(target.bytes().rev())
+            .take_while(|(l, r)| l == r)
+            .count();
+
+        // ensure end happens on a valid char boundary
+        while end > 0 && !source.is_char_boundary(source.len() - end) {
+            end -= 1;
+        }
+
+        // strip common suffix
+        let source = &source[..source.len() - end];
+        let target = &target[..target.len() - end];
+
+        let mut start = source
+            .bytes()
+            .zip(target.bytes())
+            .take_while(|(l, r)| l == r)
+            .count();
+
+        // ensure start happens on a valid char boundary
+        while start > 0 && !source.is_char_boundary(start) {
+            start -= 1;
+        }
+
+        // strip common prefix
+        let source = &source[start..];
+        let target = &target[start..];
+
+        // -- [the adapted code from C++ starts here] ---
+
+        if source.is_empty() {
+            return target.chars().count();
+        }
+
+        if target.is_empty() {
+            return source.chars().count();
+        }
+
+        let target_len = target.chars().count();
+        let mut costs = (0..=target_len).collect::<Vec<_>>();
+
+        for (source_index, source_char) in source.chars().enumerate() {
+            let mut corner = source_index;
+            costs[0] = source_index + 1;
+
+            for (target_index, target_char) in target.chars().enumerate() {
+                let upper = costs[target_index + 1];
+
+                costs[target_index + 1] = if source_char == target_char {
+                    corner
+                } else {
+                    1 + usize::min(usize::min(costs[target_index], upper), corner)
+                };
+
+                corner = upper;
+            }
+        }
+
+        costs[target_len]
+    }
+
+    fn hamming_distance(&self, other: &str) -> Option<usize> {
+        let (mut source, mut target) = (self.chars(), other.chars());
+        let mut distance = 0;
+
+        loop {
+            let source_char = match source.next() {
+                Some(c) => c,
+                None => {
+                    return match target.next() {
+                        Some(_) => None,
+                        None => Some(distance),
+                    }
+                }
+            };
+
+            let target_char = target.next()?;
+            distance += (source_char != target_char) as usize;
+        }
+    }
+
+    fn char_frequencies<M: sailed::HzMap>(&self) -> M {
+        let mut map = M::default();
+        self.chars().for_each(|c| map.incr(c));
+        map
     }
 }
 
@@ -476,6 +612,8 @@ impl EncodeUtf8 for String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::{EncodeUtf8, StrExt, StringExt};
 
     #[test]
@@ -1018,6 +1156,76 @@ mod tests {
         for init in SEED {
             let sut = init.to_string();
             assert_eq!(EncodeUtf8::encode_utf8(&sut, &mut ()), init);
+        }
+    }
+
+    #[test]
+    fn levenshtein_distance() {
+        const SEED: [(&str, &str, usize); 15] = [
+            ("", "", 0),
+            ("", "a", 1),
+            ("a", "", 1),
+            ("ring", "bring", 1),
+            ("ring", "string", 2),
+            ("update", "udpate", 2),
+            ("kitten", "sitting", 3),
+            ("saturday", "sunday", 3),
+            ("execution", "intention", 5),
+            ("rosettacode", "raisethysword", 8),
+            ("rosettacode", "rosettacode", 0),
+            ("Āgain", "āgain", 1),
+            ("agĀin", "agāin", 1),
+            ("cafexĀ", "cafeyȀ", 2),
+            ("Āxcafe", "Ȁycafe", 2),
+        ];
+
+        for (sut, other, expected) in SEED {
+            assert_eq!(sut.levenshtein_distance(other), expected);
+        }
+    }
+
+    #[test]
+    fn hamming_distance() {
+        const SEED: [(&str, &str, Option<usize>); 15] = [
+            ("", "", Some(0)),
+            ("", "a", None),
+            ("a", "", None),
+            ("ring", "bring", None),
+            ("ring", "string", None),
+            ("update", "udpate", Some(2)),
+            ("kitten", "sitting", None),
+            ("saturday", "sunday", None),
+            ("execution", "intention", Some(5)),
+            ("rosettacode", "raisethysword", None),
+            ("rosettacode", "rosettacode", Some(0)),
+            ("Āgain", "āgain", Some(1)),
+            ("agĀin", "agāin", Some(1)),
+            ("cafexĀ", "cafeyȀ", Some(2)),
+            ("Āxcafe", "Ȁycafe", Some(2)),
+        ];
+
+        for (sut, other, expected) in SEED {
+            assert!(if sut.chars().count() == other.chars().count() {
+                expected.is_some()
+            } else {
+                expected.is_none()
+            });
+            assert_eq!(sut.hamming_distance(other), expected);
+        }
+    }
+
+    #[test]
+    fn char_frequencies() {
+        const SEED: [(&str, &[(char, usize)]); 2] = [
+            ("", &[]),
+            ("hello", &[('h', 1), ('e', 1), ('l', 2), ('o', 1)]),
+        ];
+
+        for (sut, expected) in SEED {
+            assert_eq!(
+                sut.char_frequencies::<BTreeMap<_, _>>(),
+                expected.iter().map(|(c, f)| (*c, *f)).collect()
+            );
         }
     }
 }

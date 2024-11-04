@@ -169,9 +169,30 @@ The `StrExt` trait provides operations that return a new `String` rather than mo
 - **`shift`**: Shifts the string at the given index repeating fill pattern n times, returning a new `String`. 
 
 ```rust
-let s = "HelloWorld!".to_string();
+let s = "HelloWorld!";
 let shifted = s.shift(4, 2, ' ');
 assert_eq!(shifted, "Hello  World!")
+```
+
+- **`levenshtein_distance`**: Computes the Levenshtein's distance between two strings.
+
+```rust
+let s = "kitten";
+assert_eq!(s.levenshtein_distance("sitting"), 3);
+```
+
+- **`hamming_distance`**: Computes the Hamming's distance between two strings.
+
+```rust
+let s = "update";
+assert_eq!(s.hamming_distance("udpate"), 2);
+```
+
+- **`char_frequencies`**: Computes the frequencies of chars in the string.
+
+```rust
+let s = "Hello";
+s.char_frequencies::<BTreeMap<_, _>>(); // H:1 e:1 l:2 o:1
 ```
 
 ## Why string_more?
