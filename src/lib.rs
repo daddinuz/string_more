@@ -319,8 +319,7 @@ where
         }
 
         // strip common suffix
-        let source = &source[..source.len() - end];
-        let target = &target[..target.len() - end];
+        let (source, target) = (&source[..source.len() - end], &target[..target.len() - end]);
 
         let mut start = source
             .bytes()
@@ -334,8 +333,7 @@ where
         }
 
         // strip common prefix
-        let source = &source[start..];
-        let target = &target[start..];
+        let (source, target) = (&source[start..], &target[start..]);
 
         // -- [the adapted code from C++ starts here] ---
 
@@ -346,6 +344,23 @@ where
         if target.is_empty() {
             return source.chars().count();
         }
+
+        // --- [this is not part of the adapted code from C++] ---
+        // micro optimization: `costs` vector has the same cardinality
+        // of target's chars so we try to reduce memory allocations by
+        // assigning the smallest string (bytes len) to target.
+        // the memory reduction actually depends on the chars composing
+        // the string, so we optimistically bet that the fewer bytes that
+        // make up the string, the fewer chars will be present in that string.
+        // this is not always true and in those cases we could even end up
+        // allocating more, but those cases should be rare enough to
+        // justify this optimization.
+        let (source, target) = if source.len() < target.len() {
+            (target, source)
+        } else {
+            (source, target)
+        };
+        // --------------------------------------------------------------------
 
         let target_len = target.chars().count();
         let mut costs = (0..=target_len).collect::<Vec<_>>();
@@ -1161,7 +1176,7 @@ mod tests {
 
     #[test]
     fn levenshtein_distance() {
-        const SEED: [(&str, &str, usize); 15] = [
+        const SEED: [(&str, &str, usize); 17] = [
             ("", "", 0),
             ("", "a", 1),
             ("a", "", 1),
@@ -1177,6 +1192,8 @@ mod tests {
             ("agĀin", "agāin", 1),
             ("cafexĀ", "cafeyȀ", 2),
             ("Āxcafe", "Ȁycafe", 2),
+            ("lorem ipsum dolor", "ipsum", 12),
+            ("ipsum", "lorem ipsum dolor", 12),
         ];
 
         for (sut, other, expected) in SEED {
