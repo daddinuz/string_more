@@ -16,15 +16,21 @@ These traits introduce additional methods to efficiently manipulate strings, foc
 
 Add `string_more` to your `Cargo.toml`:
 
+```bash
+cargo add string_more
+```
+
+or edit your Cargo.toml manually by adding:
+
 ```toml
 [dependencies]
-string_more = "0.1"
+string_more = "0.3"
 ```
 
 Then, in your Rust code:
 
 ```rust
-use string_more::{StringExt, StrExt}; // Import both traits
+use string_more::{StringExt, StrExt}; // Import traits
 
 fn main() {
     let mut my_string = String::from("  Hello, Rust!  ");
@@ -34,8 +40,15 @@ fn main() {
     let s = "Hello, Rust!";
     let new_s = s.center(' ', 2); // Immutable operation on &str
     println!("{}", new_s); // "  Hello, Rust!  "
+
+    println!("{}", "Hello, Rust!".levenshtein_distance("Hello, World!")); // 5
 }
 ```
+
+## Why string_more?
+
+Rust’s standard library provides robust string handling, but when additional flexibility is needed, `string_more` steps in with efficient, allocation-friendly operations.
+With both in-place and immutable operations, `string_more` is ideal for optimizing string manipulation in your Rust projects.
 
 ## Methods Overview
 
@@ -195,10 +208,32 @@ let s = "Hello";
 s.char_frequencies::<BTreeMap<_, _>>(); // H:1 e:1 l:2 o:1
 ```
 
-## Why string_more?
+- **`longest_common_substring`**: Returns the longest common substring.
 
-Rust’s standard library provides robust string handling, but when additional flexibility is needed, `string_more` steps in with efficient, allocation-friendly operations.
-With both in-place and immutable operations, `string_more` is ideal for optimizing string manipulation in your Rust projects.
+```rust
+let s = "sparrow";
+s.longest_common_substring("crow"); // "row"
+```
+
+- **`next_char_boundary`**: Returns the byte index of the next char boundary in string starting from index.
+
+```rust
+let s = "🦀";
+s.next_char_boundary(2); // 4
+```
+
+- **`previous_char_boundary`**: Returns the byte index of the previous char boundary in string starting from index.
+
+```rust
+let s = "🦀";
+s.previous_char_boundary(2); // 0
+```
+
+## Safety and Coverage
+
+This crate contains a small portion of unsafe code.
+All tests run under [miri](https://github.com/rust-lang/miri) and the tests cover about 90% of the code.
+You can generate the coverage report using [tarpaulin](https://github.com/xd009642/tarpaulin).
 
 ## Contributions
 

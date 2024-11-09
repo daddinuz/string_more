@@ -118,6 +118,19 @@ pub trait StrExt: sailed::Sailed {
     /// The user can specify the output map in which the
     /// frequencies will be stored.
     fn char_frequencies<M: sailed::HzMap>(&self) -> M;
+
+    /// Returns the longest common substring between `self` and `other`.
+    fn longest_common_substring(&self, other: &str) -> &str;
+
+    /// Get the byte index of the next char in the string starting from index.
+    /// If index happens to be on a valid char boundary then index itself is returned.
+    /// Note that both 0 and string's length are consedered valid char boundaries.
+    fn next_char_boundary(&self, index: usize) -> usize;
+
+    /// Get the byte index of the previous char in the string starting from index.
+    /// If index happens to be on a valid char boundary then index itself is returned.
+    /// Note that both 0 and string's length are consedered valid char boundaries.
+    fn previous_char_boundary(&self, index: usize) -> usize;
 }
 
 /// The `StringExt` trait extends `String` with advanced in-place manipulation methods,
@@ -314,7 +327,7 @@ where
             .count();
 
         // ensure end happens on a valid char boundary
-        while end > 0 && !source.is_char_boundary(source.len() - end) {
+        while !source.is_char_boundary(source.len() - end) {
             end -= 1;
         }
 
@@ -328,7 +341,7 @@ where
             .count();
 
         // ensure start happens on a valid char boundary
-        while start > 0 && !source.is_char_boundary(start) {
+        while !source.is_char_boundary(start) {
             start -= 1;
         }
 
@@ -409,6 +422,59 @@ where
         let mut map = M::default();
         self.chars().for_each(|c| map.incr(c));
         map
+    }
+
+    fn longest_common_substring(&self, other: &str) -> &str {
+        let (sa, sb) = (self.as_bytes(), other.as_bytes());
+        let mut longest_common_substring = "";
+
+        for ia in 0..sa.len() {
+            if sa.len() - ia < longest_common_substring.len() {
+                break;
+            }
+
+            for ib in 0..sb.len() {
+                if sb.len() - ib < longest_common_substring.len() {
+                    break;
+                }
+
+                let len = sa[ia..]
+                    .iter()
+                    .zip(sb[ib..].iter())
+                    .take_while(|(ca, cb)| ca == cb)
+                    .count();
+
+                if len > longest_common_substring.len() {
+                    let start = self.next_char_boundary(ia);
+                    let end = self.previous_char_boundary(ia + len);
+                    if end - start > longest_common_substring.len() {
+                        longest_common_substring = &self[start..end];
+                    }
+                }
+            }
+        }
+
+        longest_common_substring
+    }
+
+    fn next_char_boundary(&self, mut index: usize) -> usize {
+        if index > self.len() {
+            return self.len();
+        }
+
+        while !self.is_char_boundary(index) {
+            index += 1;
+        }
+
+        index
+    }
+
+    fn previous_char_boundary(&self, mut index: usize) -> usize {
+        while !self.is_char_boundary(index) {
+            index -= 1;
+        }
+
+        index
     }
 }
 
@@ -543,10 +609,7 @@ impl StringExt for String {
                 self.shift_in_place(i, tabsize.saturating_sub(1), ' ');
                 i += tabsize;
             } else {
-                i += 1;
-                while i < self.len() && !self.is_char_boundary(i) {
-                    i += 1;
-                }
+                i = self.next_char_boundary(i + 1);
             }
         }
     }
@@ -627,9 +690,55 @@ impl EncodeUtf8 for String {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashMap};
 
     use super::{EncodeUtf8, StrExt, StringExt};
+
+    #[test]
+    fn encode_utf8() {
+        const SEED: [&str; 4] = ["", "·", "x", "Hello world!"];
+
+        for init in SEED {
+            let sut = init.to_string();
+            assert_eq!(EncodeUtf8::encode_utf8(&sut, &mut ()), init);
+        }
+    }
+
+    #[test]
+    fn next_char_boundary() {
+        const SEED: [(&str, usize, usize); 8] = [
+            ("", 0, 0),
+            ("", 1, 0),
+            ("a", 0, 0),
+            ("a", 1, 1),
+            ("·", 0, 0),
+            ("·", 1, 2),
+            ("·", 2, 2),
+            ("🦀", 2, 4),
+        ];
+
+        for (sut, index, expected) in SEED {
+            assert_eq!(sut.next_char_boundary(index), expected);
+        }
+    }
+
+    #[test]
+    fn previous_char_boundary() {
+        const SEED: [(&str, usize, usize); 8] = [
+            ("", 0, 0),
+            ("", 1, 0),
+            ("a", 0, 0),
+            ("a", 1, 1),
+            (".", 0, 0),
+            ("·", 1, 0),
+            ("·", 2, 2),
+            ("🦀", 2, 0),
+        ];
+
+        for (sut, index, expected) in SEED {
+            assert_eq!(sut.previous_char_boundary(index), expected);
+        }
+    }
 
     #[test]
     fn fill_start() {
@@ -1165,23 +1274,14 @@ mod tests {
     }
 
     #[test]
-    fn string_encode_utf8() {
-        const SEED: [&str; 4] = ["", "·", "x", "Hello world!"];
-
-        for init in SEED {
-            let sut = init.to_string();
-            assert_eq!(EncodeUtf8::encode_utf8(&sut, &mut ()), init);
-        }
-    }
-
-    #[test]
     fn levenshtein_distance() {
-        const SEED: [(&str, &str, usize); 17] = [
+        const SEED: [(&str, &str, usize); 18] = [
             ("", "", 0),
             ("", "a", 1),
             ("a", "", 1),
+            ("abc", "def", 3),
             ("ring", "bring", 1),
-            ("ring", "string", 2),
+            ("string", "ring", 2),
             ("update", "udpate", 2),
             ("kitten", "sitting", 3),
             ("saturday", "sunday", 3),
@@ -1203,12 +1303,13 @@ mod tests {
 
     #[test]
     fn hamming_distance() {
-        const SEED: [(&str, &str, Option<usize>); 15] = [
+        const SEED: [(&str, &str, Option<usize>); 16] = [
             ("", "", Some(0)),
             ("", "a", None),
             ("a", "", None),
+            ("abc", "def", Some(3)),
             ("ring", "bring", None),
-            ("ring", "string", None),
+            ("string", "ring", None),
             ("update", "udpate", Some(2)),
             ("kitten", "sitting", None),
             ("saturday", "sunday", None),
@@ -1233,8 +1334,9 @@ mod tests {
 
     #[test]
     fn char_frequencies() {
-        const SEED: [(&str, &[(char, usize)]); 2] = [
+        const SEED: [(&str, &[(char, usize)]); 3] = [
             ("", &[]),
+            ("·x·", &[('x', 1), ('·', 2)]),
             ("hello", &[('h', 1), ('e', 1), ('l', 2), ('o', 1)]),
         ];
 
@@ -1243,6 +1345,39 @@ mod tests {
                 sut.char_frequencies::<BTreeMap<_, _>>(),
                 expected.iter().map(|(c, f)| (*c, *f)).collect()
             );
+
+            assert_eq!(
+                sut.char_frequencies::<HashMap<_, _>>(),
+                expected.iter().map(|(c, f)| (*c, *f)).collect()
+            );
+        }
+    }
+
+    #[test]
+    fn longest_common_subsequence() {
+        const SEED: [(&str, &str, &str); 18] = [
+            ("", "", ""),
+            ("bar", "", ""),
+            ("", "bar", ""),
+            ("foo", "bar", ""),
+            ("hello", "hello", "hello"),
+            ("lorem ipsum dolor", "ipsum", "ipsum"),
+            ("ipsum", "lorem ipsum dolor", "ipsum"),
+            ("spĀm", "spām", "sp"),
+            ("bananĀ", "bananā", "banan"),
+            ("xĀ", "xā", "x"),
+            ("xĀ", "xȀ", "x"),
+            ("Āx", "āx", "x"),
+            ("Āx", "Ȁx", "x"),
+            ("Hello·World!", "·World", "·World"),
+            ("Hello·World!", "Hello·", "Hello·"),
+            ("0123456789", "012345", "012345"),
+            ("0123456789", "456789", "456789"),
+            ("0123456789", "345678", "345678"),
+        ];
+
+        for (sut, other, expected) in SEED {
+            assert_eq!(sut.longest_common_substring(other), expected);
         }
     }
 }
