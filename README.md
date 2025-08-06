@@ -1,5 +1,9 @@
 # string_more
 
+[![Crates.io](https://img.shields.io/crates/v/string_more.svg)](https://crates.io/crates/string_more)
+[![Docs.rs](https://img.shields.io/docsrs/string_more)](https://docs.rs/string_more)
+[![License](https://img.shields.io/crates/l/string_more.svg)](https://github.com/daddinuz/string_more/blob/main/LICENSE)
+
 `string_more` is a Rust crate that enhances the `String` and `&str` types from the standard library with powerful extension traits: `StringExt` and `StrExt`.
 These traits introduce additional methods to efficiently manipulate strings, focusing on minimizing allocations by allowing in-place modifications for `String` and allocating when necessary for `&str`.
 
