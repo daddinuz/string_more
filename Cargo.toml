@@ -2,7 +2,7 @@
 authors = ["Davide Di Carlo <daddinuz@gmail.com>"]
 description = "Extension traits for `String` and `&str` types."
 name = "string_more"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 license = "MIT"
 keywords = ["String", "str", "extension", "in-place", "edit-distance"]

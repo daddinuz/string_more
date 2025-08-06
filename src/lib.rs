@@ -11,6 +11,7 @@
 //! - **Flexible and Efficient**: Designed to extend the standard string functionality without sacrificing performance.
 
 use std::collections::{BTreeMap, HashMap};
+use std::fmt::{Display, Write};
 use std::ops::Deref;
 
 mod sailed {
@@ -131,6 +132,14 @@ pub trait StrExt: sailed::Sailed {
     /// If index happens to be on a valid char boundary then index itself is returned.
     /// Note that both 0 and string's length are consedered valid char boundaries.
     fn previous_char_boundary(&self, index: usize) -> usize;
+
+    /// Joins an iterator of items into a single `String`, using `self` as the separator.
+    ///
+    /// Each item is formatted using the `Display` trait and concatenated with `self`
+    /// placed between consecutive items.
+    fn join<T: Display>(&self, iterable: impl IntoIterator<Item = T>) -> String
+    where
+        Self: Display;
 }
 
 /// The `StringExt` trait extends `String` with advanced in-place manipulation methods,
@@ -194,9 +203,9 @@ pub trait StringExt: StrExt {
     fn replace_in_place(&mut self, from: impl EncodeUtf8, to: impl EncodeUtf8);
 }
 
-impl<T> StrExt for T
+impl<S> StrExt for S
 where
-    T: sailed::Sailed + Deref<Target = str>,
+    S: sailed::Sailed + Deref<Target = str>,
 {
     fn fill_start(&self, fill: impl EncodeUtf8, times: usize) -> String {
         let mut buf = Default::default();
@@ -475,6 +484,22 @@ where
         }
 
         index
+    }
+
+    fn join<T: Display>(&self, iterable: impl IntoIterator<Item = T>) -> String
+    where
+        Self: Display,
+    {
+        let mut iter = iterable.into_iter();
+        let mut acc = String::new();
+
+        if let Some(value) = iter.next() {
+            write!(acc, "{value}").unwrap();
+            iter.try_for_each(|item| write!(acc, "{self}{item}"))
+                .unwrap();
+        }
+
+        acc
     }
 }
 
@@ -1379,5 +1404,35 @@ mod tests {
         for (sut, other, expected) in SEED {
             assert_eq!(sut.longest_common_substring(other), expected);
         }
+    }
+
+    #[test]
+    fn join_strings() {
+        let result = ", ".join(["one", "two", "three"]);
+        assert_eq!(result, "one, two, three");
+    }
+
+    #[test]
+    fn join_integers() {
+        let result = "-".join([1, 2, 3, 4]);
+        assert_eq!(result, "1-2-3-4");
+    }
+
+    #[test]
+    fn join_single_item() {
+        let result = "/".join(["only"]);
+        assert_eq!(result, "only");
+    }
+
+    #[test]
+    fn join_empty_iterator() {
+        let result = ";".join(std::iter::empty::<String>());
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn join_non_ascii_strings() {
+        let result = "·".join(["Ā", "❤️", "Ȁ"]);
+        assert_eq!(result, "Ā·❤️·Ȁ");
     }
 }

@@ -229,6 +229,13 @@ let s = "🦀";
 s.previous_char_boundary(2); // 0
 ```
 
+- **`join`**: Joins an iterator of items into a single `String`.
+
+```rust
+let result = ", ".join(["one", "two", "three"]);
+assert_eq!(result, "one, two, three");
+```
+
 ## Safety and Coverage
 
 This crate contains a small portion of unsafe code.
