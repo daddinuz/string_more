@@ -4,251 +4,189 @@
 [![Docs.rs](https://img.shields.io/docsrs/string_more)](https://docs.rs/string_more)
 [![License](https://img.shields.io/crates/l/string_more.svg)](https://github.com/daddinuz/string_more/blob/main/LICENSE)
 
-`string_more` is a Rust crate that enhances the `String` and `&str` types from the standard library with powerful extension traits: `StringExt` and `StrExt`.
-These traits introduce additional methods to efficiently manipulate strings, focusing on minimizing allocations by allowing in-place modifications for `String` and allocating when necessary for `&str`.
+`string_more` extends `String` and `str` with two utility traits:
 
-- **`StringExt`**: Provides in-place operations for the `String` type, modifying the string directly without creating a new allocation.
-- **`StrExt`**: Offers the same operations for `&str`, but allocates and returns a new `String`, leaving the original `&str` intact.
+- `StringExt` for in-place editing on `String`
+- `StrExt` for the corresponding immutable operations on string slices
 
-## Features
-
-- **In-place Operations**: Modify `String` values directly with `StringExt`, minimizing memory allocations.
-- **Immutable Operations**: Use `StrExt` to perform operations on `&str` that allocate and return new strings.
-- **Flexible and Efficient**: Designed to extend the standard string functionality without sacrificing performance.
+The crate focuses on small, allocation-aware helpers for padding, editing, boundary handling, and simple text analysis.
 
 ## Installation
-
-Add `string_more` to your `Cargo.toml`:
 
 ```bash
 cargo add string_more
 ```
 
-or edit your Cargo.toml manually by adding:
+or add it manually:
 
 ```toml
 [dependencies]
-string_more = "0.3"
+string_more = "0.4"
 ```
 
-Then, in your Rust code:
+See [CHANGELOG.md](CHANGELOG.md) for release notes and breaking changes.
+
+## Quick Start
 
 ```rust
-use string_more::{StringExt, StrExt}; // Import traits
+use std::collections::BTreeMap;
+use string_more::{StrExt, StringExt};
 
-fn main() {
-    let mut my_string = String::from("  Hello, Rust!  ");
-    my_string.trim_in_place(); // In-place operation on String
-    println!("{}", my_string); // "Hello, Rust!"
+let centered = "rust".center('-', 2);
+assert_eq!(centered, "--rust--");
 
-    let s = "Hello, Rust!";
-    let new_s = s.center(' ', 2); // Immutable operation on &str
-    println!("{}", new_s); // "  Hello, Rust!  "
+let mut value = String::from(" rust\t");
+value.expand_tabs_in_place(2);
+value.trim_in_place();
+assert_eq!(value, "rust");
 
-    println!("{}", "Hello, Rust!".levenshtein_distance("Hello, World!")); // 5
-}
+assert_eq!("🦀rust".truncate_to_chars(2), "🦀r");
+assert_eq!("foobar".common_prefix("foobaz"), "fooba");
+
+let frequencies = "Hello".byte_frequencies::<BTreeMap<_, _>>();
+assert_eq!(frequencies[&b'l'], 2);
 ```
 
-## Why string_more?
+## API Notes
 
-Rust’s standard library provides robust string handling, but when additional flexibility is needed, `string_more` steps in with efficient, allocation-friendly operations.
-With both in-place and immutable operations, `string_more` is ideal for optimizing string manipulation in your Rust projects.
+- `StringExt` mutates `String` in place.
+- `StrExt` leaves the original value unchanged. Most transformation methods return a new `String`, while some analysis and slicing helpers return borrowed `&str` results.
+- Most text operations are based on Unicode scalar values (`char`), not grapheme clusters.
+- Methods that accept indices use byte offsets and require valid char boundaries.
+- Most text-like inputs accepted by the API can be passed as `char`, `&str`, or `String` through the sealed `EncodeUtf8` trait.
 
-## Methods Overview
+## Frequency Example
 
-### `StringExt` (In-place operations for `String`)
-
-- **`trim_in_place`**: Removes leading and trailing whitespace.
-  
-  ```rust
-  let mut s = String::from("  Hello ");
-  s.trim_in_place();
-  assert_eq!(s, "Hello");
-  ```
-
-- **`trim_start_in_place`**: Removes leading whitespace only.
-
-  ```rust
-  let mut s = String::from("  Hello ");
-  s.trim_start_in_place();
-  assert_eq!(s, "Hello ");
-  ```
-
-- **`trim_end_in_place`**: Removes trailing whitespace only.
-
-  ```rust
-  let mut s = String::from("  Hello ");
-  s.trim_end_in_place();
-  assert_eq!(s, "  Hello");
-  ```
-
-- **`fill_start_in_place`**: Fills the start of the string with the provided `&str`, repeated a specified number of times.
-
-  ```rust
-  let mut s = String::from("Hello");
-  s.fill_start_in_place("-", 3);
-  assert_eq!(s, "---Hello");
-  ```
-
-- **`fill_end_in_place`**: Fills the end of the string with the provided `&str`, repeated a specified number of times.
-
-  ```rust
-  let mut s = String::from("Hello");
-  s.fill_end_in_place("-", 3);
-  assert_eq!(s, "Hello---");
-  ```
-
-- **`center_in_place`**: Centers the string by padding both the start and end with the same string.
-
-  ```rust
-  let mut s = String::from("Hello");
-  s.center_in_place("-", 3);
-  assert_eq!(s, "---Hello---");
-  ```
-
-- **`enclose_in_place`**: Encloses the string with two separate `&str` values, one at the start and one at the end.
-
-  ```rust
-  let mut s = String::from("Hello");
-  s.enclose_in_place("[", "]");
-  assert_eq!(s, "[Hello]");
-  ```
-
-- **`expand_tabs_in_place`**: Replaces tab characters with the specified number of spaces.
-
-  ```rust
-  let mut s = String::from("Hello\tRust");
-  s.expand_tabs_in_place(4);
-  assert_eq!(s, "Hello    Rust");
-  ```
-
-- **`shift_in_place`**: Shifts the string at the given index repeating fill pattern n times. 
+`char_frequencies` counts Unicode scalar values, while `byte_frequencies` counts UTF-8 bytes:
 
 ```rust
-let s = "HelloWorld!".to_string();
-s.shift_in_place(4, 2, ' ');
-assert_eq!(s, "Hello  World!")
+use std::collections::BTreeMap;
+use string_more::StrExt;
+
+let s = "·x·";
+
+let char_frequencies = s.char_frequencies::<BTreeMap<_, _>>();
+assert_eq!(char_frequencies[&'·'], 2);
+assert_eq!(char_frequencies[&'x'], 1);
+
+let byte_frequencies = s.byte_frequencies::<BTreeMap<_, _>>();
+assert_eq!(byte_frequencies[&0xC2], 2);
+assert_eq!(byte_frequencies[&0xB7], 2);
+assert_eq!(byte_frequencies[&b'x'], 1);
 ```
 
-- **`replace_in_place`**: Replaces a substring with another substring. 
+## Overview
+
+### In-place editing with `StringExt`
+
+- `trim_start_in_place`, `trim_end_in_place`, `trim_in_place`
+- `fill_start_in_place`, `fill_end_in_place`, `center_in_place`
+- `pad_start_to_in_place`, `pad_end_to_in_place`, `center_to_in_place`
+- `enclose_in_place`
+- `expand_tabs_in_place`
+- `strip_prefix_in_place`, `strip_suffix_in_place`
+- `truncate_to_chars_in_place`
+- `shift_in_place`
+- `replace_in_place`
 
 ```rust
-let s = "HelloWorld!".to_string();
-s.replace_in_place("World", " world");
-assert_eq!(s, "Hello world!")
+use string_more::StringExt;
+
+let mut s = String::from("  foobar\t");
+s.expand_tabs_in_place(2);
+s.trim_in_place();
+s.strip_prefix_in_place("foo");
+s.enclose_in_place("[", "]");
+
+assert_eq!(s, "[bar]");
 ```
 
+### Immutable helpers with `StrExt`
 
-### `StrExt` (Immutable operations for `&str`)
-
-The `StrExt` trait provides operations that return a new `String` rather than modifying the original `&str`.
-
-- **`fill_start`**: Fills the start of the string with the provided `&str` and returns a new `String`.
-
-  ```rust
-  let s = "Hello";
-  let filled = s.fill_start("-", 3);
-  assert_eq!(filled, "---Hello");
-  ```
-
-- **`fill_end`**: Fills the end of the string with the provided `&str` and returns a new `String`.
-
-  ```rust
-  let s = "Hello";
-  let filled = s.fill_end("-", 3);
-  assert_eq!(filled, "Hello---");
-  ```
-
-- **`center`**: Centers the string with padding on both sides and returns a new `String`.
-
-  ```rust
-  let s = "Hello";
-  let centered = s.center("-", 3);
-  assert_eq!(centered, "---Hello---");
-  ```
-
-- **`enclose`**: Encloses the string with two `&str` values, returning a new `String`.
-
-  ```rust
-  let s = "Hello";
-  let enclosed = s.enclose("[", "]");
-  assert_eq!(enclosed, "[Hello]");
-  ```
-
-- **`expand_tabs`**: Replaces tab characters with the specified number of spaces, returning a new `String`.
-
-  ```rust
-  let s = "Hello\tRust";
-  let expanded = s.expand_tabs(4);
-  assert_eq!(expanded, "Hello    Rust");
-  ```
-
-- **`shift`**: Shifts the string at the given index repeating fill pattern n times, returning a new `String`. 
+- `fill_start`, `fill_end`, `center`
+- `pad_start_to`, `pad_end_to`, `center_to`
+- `enclose`
+- `expand_tabs`
+- `truncate_to_chars`
+- `shift`
+- `common_prefix`, `common_suffix`
+- `longest_common_substring`
+- `levenshtein_distance`, `hamming_distance`
+- `char_frequencies`, `byte_frequencies`
+- `next_char_boundary`, `previous_char_boundary`
+- `join`
 
 ```rust
-let s = "HelloWorld!";
-let shifted = s.shift(4, 2, ' ');
-assert_eq!(shifted, "Hello  World!")
+use string_more::StrExt;
+
+assert_eq!("42".pad_start_to(5, '0'), "00042");
+assert_eq!("foobar".common_suffix("quxbar"), "bar");
+assert_eq!("sparrow".longest_common_substring("crow"), "row");
+assert_eq!(", ".join(["one", "two", "three"]), "one, two, three");
 ```
 
-- **`levenshtein_distance`**: Computes the Levenshtein's distance between two strings.
+## Selected Methods
+
+### Padding and enclosure
 
 ```rust
-let s = "kitten";
-assert_eq!(s.levenshtein_distance("sitting"), 3);
+use string_more::{StrExt, StringExt};
+
+assert_eq!("Hello".fill_start("-", 3), "---Hello");
+assert_eq!("Hello".fill_end("-", 3), "Hello---");
+assert_eq!("Hello".center("-", 3), "---Hello---");
+assert_eq!("42".center_to(5, ' '), " 42  ");
+
+let mut s = String::from("Hello");
+s.enclose_in_place("[", "]");
+assert_eq!(s, "[Hello]");
 ```
 
-- **`hamming_distance`**: Computes the Hamming's distance between two strings.
+### Truncation and prefix/suffix helpers
 
 ```rust
-let s = "update";
-assert_eq!(s.hamming_distance("udpate"), 2);
+use string_more::{StrExt, StringExt};
+
+assert_eq!("🦀rust".truncate_to_chars(2), "🦀r");
+assert_eq!("foobar".common_prefix("foobaz"), "fooba");
+assert_eq!("foobar".common_suffix("quxbar"), "bar");
+
+let mut s = String::from("foobar");
+s.strip_prefix_in_place("foo");
+assert_eq!(s, "bar");
 ```
 
-- **`char_frequencies`**: Computes the frequencies of chars in the string.
+### Boundary-aware indexing
 
 ```rust
-let s = "Hello";
-s.char_frequencies::<BTreeMap<_, _>>(); // H:1 e:1 l:2 o:1
+use string_more::{StrExt, StringExt};
+
+assert_eq!("🦀".next_char_boundary(2), 4);
+assert_eq!("🦀".previous_char_boundary(2), 0);
+
+let mut s = String::from("HelloWorld!");
+s.shift_in_place(5, 1, ' ');
+assert_eq!(s, "Hello World!");
 ```
 
-- **`longest_common_substring`**: Returns the longest common substring.
+### Distances and substring search
 
 ```rust
-let s = "sparrow";
-s.longest_common_substring("crow"); // "row"
-```
+use string_more::StrExt;
 
-- **`next_char_boundary`**: Returns the byte index of the next char boundary in string starting from index.
-
-```rust
-let s = "🦀";
-s.next_char_boundary(2); // 4
-```
-
-- **`previous_char_boundary`**: Returns the byte index of the previous char boundary in string starting from index.
-
-```rust
-let s = "🦀";
-s.previous_char_boundary(2); // 0
-```
-
-- **`join`**: Joins an iterator of items into a single `String`.
-
-```rust
-let result = ", ".join(["one", "two", "three"]);
-assert_eq!(result, "one, two, three");
+assert_eq!("kitten".levenshtein_distance("sitting"), 3);
+assert_eq!("karolin".hamming_distance("kathrin"), Some(3));
+assert_eq!("abc🦀".longest_common_substring("zzabcx🦀y"), "abc");
 ```
 
 ## Safety and Coverage
 
-This crate contains a small portion of unsafe code.
-All tests run under [miri](https://github.com/rust-lang/miri) and the tests cover about 90% of the code.
-You can generate the coverage report using [tarpaulin](https://github.com/xd009642/tarpaulin).
+This crate contains a small amount of `unsafe` code in the in-place mutation layer.
+The public API is covered by unit tests and doctests.
 
-## Contributions
+## Contributing
 
-Contributions are always welcome! If you have ideas for new string operations or performance improvements, feel free to open an issue or submit a pull request.
+Contributions are welcome! Feel free to open an issue or submit a pull request.
 
 ## License
 
